@@ -1,0 +1,10 @@
+-- CreateEnum
+CREATE TYPE "OrgStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'EXPIRED');
+
+-- AlterEnum
+ALTER TYPE "UserRole" ADD VALUE 'SUPERADMIN';
+
+-- AlterTable
+ALTER TABLE "organizations" ADD COLUMN     "expiryDate" TIMESTAMP(3),
+ADD COLUMN     "joinDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "status" "OrgStatus" NOT NULL DEFAULT 'ACTIVE';

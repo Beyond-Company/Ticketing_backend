@@ -1,0 +1,260 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tickets   Ticket[]
+  comments  Comment[]
+  organizations UserOrganization[]
+  categoryAssignments UserCategoryAssignment[]
+  assignedTickets Ticket[] @relation("AssignedTickets")
+  notifications Notification[]
+  activityLogs ActivityLog[]
+  timeEntries TimeEntry[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  ORG_ADMIN
+  SUPERADMIN
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  subdomain String?  @unique
+  joinDate  DateTime @default(now())
+  expiryDate DateTime?
+  status    OrgStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     UserOrganization[]
+  tickets   Ticket[]
+  categories Category[]
+  settings  Json?    // Store organization-specific settings
+
+  @@map("organizations")
+}
+
+enum OrgStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+model UserOrganization {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgUserRole  @default(MEMBER)
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("user_organizations")
+}
+
+enum OrgUserRole {
+  MEMBER
+  ADMIN
+}
+
+model Category {
+  id             String       @id @default(cuid())
+  name           String
+  nameAr         String?      // Arabic name
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tickets        Ticket[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userAssignments UserCategoryAssignment[]
+
+  @@unique([name, organizationId])
+  @@map("categories")
+}
+
+model Ticket {
+  id             String      @id @default(cuid())
+  title          String
+  description    String
+  status         TicketStatus @default(OPEN)
+  priority       Priority    @default(MEDIUM)
+  categoryId     String?
+  userId         String?
+  organizationId String
+  assignedTo     String?
+  publicToken    String?     @unique // For public ticket tracking
+  submitterName  String?     // Name for public ticket submissions (when userId is null)
+  submitterEmail String?     // Email for public ticket submissions (when userId is null)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedUser   User?       @relation("AssignedTickets", fields: [assignedTo], references: [id], onDelete: SetNull)
+  category       Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  comments       Comment[]
+  attachments    Attachment[]
+  activityLogs   ActivityLog[]
+  timeEntries    TimeEntry[]
+
+  @@map("tickets")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  ticketId  String
+  userId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  editedAt  DateTime?
+  isEdited  Boolean  @default(false)
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@map("comments")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("password_resets")
+}
+
+model LoginOTP {
+  id        String   @id @default(cuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  used      Boolean  @default(false)
+
+  @@map("login_otps")
+}
+
+model UserCategoryAssignment {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  organizationId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@map("user_category_assignments")
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int      // Size in bytes
+  path        String   // File path on server
+  ticketId    String?
+  commentId   String?
+  uploadedBy  String?
+  createdAt   DateTime @default(now())
+  ticket      Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment     Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  ticketId  String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TICKET_CREATED
+  TICKET_UPDATED
+  TICKET_ASSIGNED
+  TICKET_STATUS_CHANGED
+  COMMENT_ADDED
+  TICKET_MENTIONED
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String?
+  action    String   // e.g., "STATUS_CHANGED", "PRIORITY_CHANGED", "ASSIGNED"
+  field     String?  // Field that was changed
+  oldValue  String?  // Old value (JSON stringified if complex)
+  newValue  String?  // New value (JSON stringified if complex)
+  metadata  Json?    // Additional metadata
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
+}
+
+model TimeEntry {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String
+  description String?
+  hours       Float    // Hours worked
+  minutes     Int      // Additional minutes (0-59)
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("time_entries")
+}
