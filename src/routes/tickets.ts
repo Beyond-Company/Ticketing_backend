@@ -150,7 +150,7 @@ router.get('/', authenticate, identifyOrganization, getOrganizationFromUser, ver
     // Build orderBy clause
     const orderBy: any = {};
     const validSortFields = ['createdAt', 'updatedAt', 'title', 'priority', 'status'];
-    const sortField = validSortFields.includes(sortBy as string) ? sortBy : 'createdAt';
+    const sortField = (typeof sortBy === 'string' && validSortFields.includes(sortBy)) ? sortBy : 'createdAt';
     orderBy[sortField] = sortOrder === 'asc' ? 'asc' : 'desc';
 
     const tickets = await prisma.ticket.findMany({
