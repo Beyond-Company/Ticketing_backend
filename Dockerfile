@@ -1,8 +1,11 @@
-# Use Node.js LTS version
-FROM node:20-alpine
+# Use Node.js LTS version (Debian-based for better Prisma compatibility)
+FROM node:20-slim
 
-# Install netcat for health checks
-RUN apk add --no-cache netcat-openbsd
+# Install dependencies for Prisma and health checks
+RUN apt-get update && apt-get install -y \
+    openssl \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -35,9 +38,9 @@ RUN npm run build
 # Expose port
 EXPOSE 5000
 
-# Health check
+# Health check (uses PORT env var, defaults to 5000)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 5000) + '/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Use entrypoint script
 ENTRYPOINT ["docker-entrypoint.sh"]
