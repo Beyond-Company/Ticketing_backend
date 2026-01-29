@@ -29,6 +29,9 @@ fi
 echo "Running database migrations..."
 npx prisma migrate deploy || echo "Migrations may have already been applied"
 
+echo "Running database seed..."
+npm run prisma:seed || echo "Seed may have already been run"
+
 echo "Starting application..."
 exec "$@"
 

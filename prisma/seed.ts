@@ -27,15 +27,35 @@ async function main() {
 
   // Create superadmin user
   console.log('👑 Creating superadmin user...');
-  const superadminPassword = await bcrypt.hash('superadmin123', 10);
-  const superadmin = await prisma.user.create({
-    data: {
-      email: 'superadmin@ticketing.com',
-      password: superadminPassword,
-      name: 'Super Admin',
-      role: 'SUPERADMIN',
-    },
+  const superadminEmail = 'dev@beyondcompany.sa';
+  const superadminPassword = await bcrypt.hash('123456789', 10);
+  
+  // Check if superadmin already exists, if so update it, otherwise create
+  const existingSuperadmin = await prisma.user.findUnique({
+    where: { email: superadminEmail },
   });
+
+  let superadmin;
+  if (existingSuperadmin) {
+    console.log('   Superadmin already exists, updating password...');
+    superadmin = await prisma.user.update({
+      where: { email: superadminEmail },
+      data: {
+        password: superadminPassword,
+        role: 'SUPERADMIN',
+        name: existingSuperadmin.name || 'Super Admin',
+      },
+    });
+  } else {
+    superadmin = await prisma.user.create({
+      data: {
+        email: superadminEmail,
+        password: superadminPassword,
+        name: 'Super Admin',
+        role: 'SUPERADMIN',
+      },
+    });
+  }
 
   // Create admin users (each admin will have only one organization)
   console.log('👤 Creating admin users...');
@@ -351,7 +371,7 @@ async function main() {
   console.log(`   - Tickets: 5`);
   console.log(`   - Comments: 4`);
   console.log('\n🔑 Login Credentials:');
-  console.log('   Superadmin: superadmin@ticketing.com / superadmin123');
+  console.log(`   Superadmin: ${superadminEmail} / 123456789`);
   console.log('   Admin 1: admin1@ticketing.com / admin123 (Acme Corporation)');
   console.log('   Admin 2: admin2@ticketing.com / admin123 (Tech Solutions Inc)');
   console.log('   Admin 3: admin3@ticketing.com / admin123 (Digital Innovations)');
