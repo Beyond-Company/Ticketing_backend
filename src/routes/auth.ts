@@ -95,11 +95,15 @@ router.post('/signup', async (req: Request, res: Response) => {
       organizationId = organization.id;
     }
 
+    // If organization was created, set user role to ADMIN
+    const userRole = organizationId ? 'ADMIN' : 'USER';
+
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name,
+        role: userRole,
       },
       select: {
         id: true,
