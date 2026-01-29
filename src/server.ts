@@ -15,8 +15,32 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Normalize FRONTEND_URL to remove trailing slash for CORS matching
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+const normalizedFrontendUrl = frontendUrl.replace(/\/$/, ''); // Remove trailing slash
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Normalize the origin to remove trailing slash for comparison
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    
+    // Check if the normalized origin matches the normalized frontend URL
+    if (normalizedOrigin === normalizedFrontendUrl) {
+      callback(null, true);
+    } else {
+      // In development, allow localhost origins
+      if (process.env.NODE_ENV !== 'production' && origin.includes('localhost')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
 }));
 
