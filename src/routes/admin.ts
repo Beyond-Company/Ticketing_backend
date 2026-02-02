@@ -143,7 +143,7 @@ router.get('/analytics', authenticate, requireSuperAdmin, async (req: AuthReques
         _count: true,
       }),
       prisma.ticket.groupBy({
-        by: ['status'],
+        by: ['statusId'],
         _count: true,
       }),
       prisma.organization.findMany({
@@ -171,6 +171,14 @@ router.get('/analytics', authenticate, requireSuperAdmin, async (req: AuthReques
       }),
     ]);
 
+    // Resolve status names for ticketsByStatus
+    const statusIds = [...new Set(ticketsByStatus.map((t: { statusId: string }) => t.statusId))];
+    const statuses = statusIds.length > 0 ? await prisma.ticketStatus.findMany({
+      where: { id: { in: statusIds } },
+      select: { id: true, name: true },
+    }) : [];
+    const statusById = Object.fromEntries(statuses.map(s => [s.id, s.name]));
+
     res.json({
       overview: {
         totalUsers,
@@ -185,7 +193,8 @@ router.get('/analytics', authenticate, requireSuperAdmin, async (req: AuthReques
         return acc;
       }, {} as Record<string, number>),
       ticketsByStatus: ticketsByStatus.reduce((acc, item) => {
-        acc[item.status] = item._count;
+        const name = statusById[item.statusId] ?? item.statusId;
+        acc[name] = item._count;
         return acc;
       }, {} as Record<string, number>),
       recentOrganizations,

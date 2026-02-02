@@ -50,6 +50,7 @@ model Organization {
   users     UserOrganization[]
   tickets   Ticket[]
   categories Category[]
+  ticketStatuses TicketStatus[]
   settings  Json?    // Store organization-specific settings
 
   @@map("organizations")
@@ -95,11 +96,27 @@ model Category {
   @@map("categories")
 }
 
+model TicketStatus {
+  id             String       @id @default(cuid())
+  name           String
+  nameAr         String?
+  color          String?      // Hex color for UI (e.g. #3b82f6)
+  order          Int          @default(0) // Display order
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tickets        Ticket[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([name, organizationId])
+  @@map("ticket_statuses")
+}
+
 model Ticket {
   id             String      @id @default(cuid())
   title          String
   description    String
-  status         TicketStatus @default(OPEN)
+  statusId       String
   priority       Priority    @default(MEDIUM)
   categoryId     String?
   userId         String?
@@ -113,6 +130,7 @@ model Ticket {
   user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   assignedUser   User?       @relation("AssignedTickets", fields: [assignedTo], references: [id], onDelete: SetNull)
   category       Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  status         TicketStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   comments       Comment[]
   attachments    Attachment[]
@@ -120,13 +138,6 @@ model Ticket {
   timeEntries    TimeEntry[]
 
   @@map("tickets")
-}
-
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
 }
 
 enum Priority {

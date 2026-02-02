@@ -24,12 +24,21 @@ router.get('/analytics', authenticate, identifyOrganization, getOrganizationFrom
       where.createdAt = dateFilter;
     }
 
-    // Get ticket counts by status
-    const ticketsByStatus = await prisma.ticket.groupBy({
-      by: ['status'],
+    // Get ticket counts by status (statusId)
+    const ticketsByStatusRaw = await prisma.ticket.groupBy({
+      by: ['statusId'],
       where,
       _count: true,
     });
+    const statusIds = ticketsByStatusRaw.map(t => t.statusId).filter(Boolean) as string[];
+    const statuses = await prisma.ticketStatus.findMany({
+      where: { id: { in: statusIds } },
+    });
+    const ticketsByStatus = ticketsByStatusRaw.map(t => ({
+      statusId: t.statusId,
+      _count: t._count,
+      status: statuses.find(s => s.id === t.statusId),
+    }));
 
     // Get ticket counts by priority
     const ticketsByPriority = await prisma.ticket.groupBy({
@@ -57,11 +66,19 @@ router.get('/analytics', authenticate, identifyOrganization, getOrganizationFrom
       category: categories.find(c => c.id === t.categoryId),
     }));
 
-    // Get average resolution time
+    // Get average resolution time (tickets with status name Resolved or Closed)
+    const resolvedStatuses = await prisma.ticketStatus.findMany({
+      where: {
+        organizationId,
+        name: { in: ['Resolved', 'Closed'] },
+      },
+      select: { id: true },
+    });
+    const resolvedStatusIds = resolvedStatuses.map(s => s.id);
     const resolvedTickets = await prisma.ticket.findMany({
       where: {
         ...where,
-        status: { in: ['RESOLVED', 'CLOSED'] },
+        statusId: resolvedStatusIds.length > 0 ? { in: resolvedStatusIds } : undefined,
         updatedAt: { not: null },
       },
       select: {
@@ -85,14 +102,14 @@ router.get('/analytics', authenticate, identifyOrganization, getOrganizationFrom
       where,
       select: {
         createdAt: true,
-        status: true,
+        statusId: true,
       },
       orderBy: {
         createdAt: 'asc',
       },
     });
 
-    // Group by date
+    // Group by date (byStatus key = statusId)
     const ticketsByDate: Record<string, { total: number; byStatus: Record<string, number> }> = {};
     ticketsOverTime.forEach(ticket => {
       const date = new Date(ticket.createdAt).toISOString().split('T')[0];
@@ -100,7 +117,8 @@ router.get('/analytics', authenticate, identifyOrganization, getOrganizationFrom
         ticketsByDate[date] = { total: 0, byStatus: {} };
       }
       ticketsByDate[date].total++;
-      ticketsByDate[date].byStatus[ticket.status] = (ticketsByDate[date].byStatus[ticket.status] || 0) + 1;
+      const sid = ticket.statusId ?? '';
+      ticketsByDate[date].byStatus[sid] = (ticketsByDate[date].byStatus[sid] || 0) + 1;
     });
 
     // Get top assignees
@@ -154,7 +172,7 @@ router.get('/export', authenticate, identifyOrganization, getOrganizationFromUse
       if (startDate) where.createdAt.gte = new Date(startDate as string);
       if (endDate) where.createdAt.lte = new Date(endDate as string);
     }
-    if (status && status !== 'all') where.status = status;
+    if (status && status !== 'all') where.statusId = status;
     if (priority) where.priority = priority;
 
     const tickets = await prisma.ticket.findMany({
@@ -173,6 +191,7 @@ router.get('/export', authenticate, identifyOrganization, getOrganizationFromUse
           },
         },
         category: true,
+        status: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -184,7 +203,7 @@ router.get('/export', authenticate, identifyOrganization, getOrganizationFromUse
       const csvRows = tickets.map(ticket => [
         ticket.id,
         ticket.title,
-        ticket.status,
+        ticket.status?.name ?? '',
         ticket.priority,
         ticket.category?.name || '',
         ticket.user?.name || ticket.submitterEmail || '',

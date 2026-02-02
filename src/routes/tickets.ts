@@ -34,7 +34,7 @@ const createPublicTicketSchema = z.object({
 const updateTicketSchema = z.object({
   title: z.string().min(3).optional(),
   description: z.string().min(10).optional(),
-  status: z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']).optional(),
+  statusId: z.string().optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   assignedTo: z.string().optional(),
   categoryId: z.string().optional().nullable(),
@@ -107,9 +107,9 @@ router.get('/', authenticate, identifyOrganization, getOrganizationFromUser, ver
       ];
     }
 
-    // Status filter
+    // Status filter (statusId)
     if (status && typeof status === 'string' && status !== 'all') {
-      where.status = status;
+      where.statusId = status;
     }
 
     // Priority filter
@@ -149,7 +149,7 @@ router.get('/', authenticate, identifyOrganization, getOrganizationFromUser, ver
 
     // Build orderBy clause
     const orderBy: any = {};
-    const validSortFields = ['createdAt', 'updatedAt', 'title', 'priority', 'status'];
+    const validSortFields = ['createdAt', 'updatedAt', 'title', 'priority', 'statusId'];
     const sortField = (typeof sortBy === 'string' && validSortFields.includes(sortBy)) ? sortBy : 'createdAt';
     orderBy[sortField] = sortOrder === 'asc' ? 'asc' : 'desc';
 
@@ -171,6 +171,7 @@ router.get('/', authenticate, identifyOrganization, getOrganizationFromUser, ver
           },
         },
         category: true,
+        status: true,
         comments: {
           include: {
             user: {
@@ -231,6 +232,7 @@ router.get('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
           },
         },
         category: true,
+        status: true,
         comments: {
           include: {
             user: {
@@ -318,6 +320,7 @@ router.get('/public', identifyOrganization, async (req: OrgRequest, res: Respons
       },
       include: {
         category: true,
+        status: true,
         comments: {
           include: {
             user: {
@@ -376,6 +379,15 @@ router.post('/', authenticate, identifyOrganization, getOrganizationFromUser, ve
       }
     }
 
+    // Default status: first status by order for this organization
+    const defaultStatus = await prisma.ticketStatus.findFirst({
+      where: { organizationId },
+      orderBy: { order: 'asc' },
+    });
+    if (!defaultStatus) {
+      return res.status(400).json({ message: 'No ticket status defined for this organization. Please create at least one status in Settings.' });
+    }
+
     // Generate a simple 8-character alphanumeric token
     const generateSimpleToken = () => {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars like 0, O, I, 1
@@ -426,6 +438,7 @@ router.post('/', authenticate, identifyOrganization, getOrganizationFromUser, ve
       data: {
         title,
         description,
+        statusId: defaultStatus.id,
         priority: priority || 'MEDIUM',
         categoryId: categoryId || null,
         userId,
@@ -442,6 +455,7 @@ router.post('/', authenticate, identifyOrganization, getOrganizationFromUser, ve
           },
         },
         category: true,
+        status: true,
         comments: true,
         organization: {
           select: {
@@ -551,6 +565,15 @@ router.post('/public', identifyOrganization, async (req: OrgRequest, res: Respon
       attempts++;
     }
 
+    // Default status: first status by order for this organization
+    const defaultStatus = await prisma.ticketStatus.findFirst({
+      where: { organizationId },
+      orderBy: { order: 'asc' },
+    });
+    if (!defaultStatus) {
+      return res.status(400).json({ message: 'No ticket status defined for this organization. Please contact support.' });
+    }
+
     // Auto-assign ticket based on category assignment (get first assigned user for ticket assignment)
     let assignedUserId: string | null = null;
     let allAssignedUsers: Array<{ id: string; email: string; name: string }> = [];
@@ -583,6 +606,7 @@ router.post('/public', identifyOrganization, async (req: OrgRequest, res: Respon
       data: {
         title,
         description,
+        statusId: defaultStatus.id,
         priority: 'MEDIUM', // Default priority for public tickets
         categoryId: categoryId || null,
         organizationId,
@@ -593,6 +617,7 @@ router.post('/public', identifyOrganization, async (req: OrgRequest, res: Respon
       },
       include: {
         category: true,
+        status: true,
         organization: {
           select: {
             slug: true,
@@ -655,6 +680,7 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
         organizationId,
       },
       include: {
+        status: true,
         organization: {
           select: {
             slug: true,
@@ -713,15 +739,29 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
       }
     }
 
-    // Store old values for activity logging
-    const oldStatus = ticket.status;
+    // Verify statusId belongs to organization if provided
+    if (data.statusId !== undefined) {
+      const statusRecord = await prisma.ticketStatus.findFirst({
+        where: {
+          id: data.statusId,
+          organizationId,
+        },
+      });
+      if (!statusRecord) {
+        return res.status(400).json({ message: 'Ticket status not found in this organization' });
+      }
+    }
+
+    // Store old values for activity logging (ticket includes status relation from GET)
+    const oldStatusId = ticket.statusId;
+    const oldStatusName = ticket.status?.name ?? oldStatusId;
     const oldPriority = ticket.priority;
     const oldAssignedTo = ticket.assignedTo;
     const oldCategoryId = ticket.categoryId;
     const oldTitle = ticket.title;
     const oldDescription = ticket.description;
 
-    const statusChanged = data.status !== undefined && data.status !== oldStatus;
+    const statusChanged = data.statusId !== undefined && data.statusId !== oldStatusId;
     const priorityChanged = data.priority !== undefined && data.priority !== oldPriority;
     const assignmentChanged = data.assignedTo !== undefined && data.assignedTo !== oldAssignedTo;
     const categoryChanged = data.categoryId !== undefined && data.categoryId !== oldCategoryId;
@@ -750,6 +790,7 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
           },
         },
         category: true,
+        status: true,
         comments: {
           include: {
             user: {
@@ -770,7 +811,7 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
 
     // Log all changes
     if (statusChanged) {
-      await logTicketChange(id, userId, 'status', oldStatus, updatedTicket.status);
+      await logTicketChange(id, userId, 'status', oldStatusName, updatedTicket.status?.name ?? updatedTicket.statusId);
     }
     if (priorityChanged) {
       await logTicketChange(id, userId, 'priority', oldPriority, updatedTicket.priority);
@@ -795,7 +836,7 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
         userId: submitterUserId,
         type: 'TICKET_STATUS_CHANGED',
         title: 'Ticket Status Updated',
-        message: `Ticket "${updatedTicket.title}" status changed from ${oldStatus} to ${updatedTicket.status}.`,
+        message: `Ticket "${updatedTicket.title}" status changed from ${oldStatusName} to ${updatedTicket.status?.name ?? updatedTicket.statusId}.`,
         ticketId: updatedTicket.id,
       });
     }
@@ -816,17 +857,18 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
       sendTicketStatusChangeEmail(
         submitterEmail,
         updatedTicket.title,
-        oldStatus,
-        updatedTicket.status,
+        oldStatusName,
+        updatedTicket.status?.name ?? updatedTicket.statusId,
         updatedTicket.id,
         ticket.publicToken,
-        ticket.organization.slug,
+        ticket.organization?.slug ?? null,
         'en'
       ).catch(err => console.error('Failed to send status change email:', err));
     }
 
     // Send email notification if ticket was assigned to a user
-    if (assignmentChanged && updatedTicket.assignedTo && category) {
+    const categoryForAssignment = category ?? updatedTicket.category;
+    if (assignmentChanged && updatedTicket.assignedTo && categoryForAssignment) {
       const assignedUser = await prisma.user.findUnique({
         where: { id: updatedTicket.assignedTo },
         select: { email: true },
@@ -837,8 +879,8 @@ router.put('/:id', authenticate, identifyOrganization, getOrganizationFromUser, 
           assignedUser.email,
           updatedTicket.title,
           updatedTicket.id,
-          category.name,
-          ticket.organization.slug,
+          categoryForAssignment.name,
+          ticket.organization?.slug ?? '',
           'en'
         ).catch(err => console.error('Failed to send ticket assignment email:', err));
       }
@@ -1432,12 +1474,22 @@ router.post('/bulk', authenticate, identifyOrganization, getOrganizationFromUser
         break;
 
       case 'changeStatus':
+        if (!data?.statusId) {
+          return res.status(400).json({ message: 'statusId is required for changeStatus action' });
+        }
+        // Verify statusId belongs to organization
+        const bulkStatus = await prisma.ticketStatus.findFirst({
+          where: { id: data.statusId, organizationId },
+        });
+        if (!bulkStatus) {
+          return res.status(400).json({ message: 'Ticket status not found in this organization' });
+        }
         result = await prisma.ticket.updateMany({
           where: { id: { in: ticketIds } },
-          data: { status: data?.status },
+          data: { statusId: data.statusId },
         });
         for (const ticketId of ticketIds) {
-          await logTicketChange(ticketId, userId, 'status', null, data?.status);
+          await logTicketChange(ticketId, userId, 'status', null, bulkStatus.name);
         }
         break;
 
