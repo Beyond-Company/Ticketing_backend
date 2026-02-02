@@ -26,6 +26,9 @@ else
   echo "Database is ready!"
 fi
 
+echo "Running Prisma generate..."
+npx prisma generate
+
 echo "Running database migrations..."
 npx prisma migrate deploy || echo "Migrations may have already been applied"
 
