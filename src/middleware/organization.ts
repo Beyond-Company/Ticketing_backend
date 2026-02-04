@@ -26,10 +26,18 @@ export const identifyOrganization = async (
   try {
     let organizationSlug: string | undefined;
 
-    // Method 1: Check subdomain
-    const host = req.get('host') || '';
+    // Method 1: Check subdomain (skip when this is the main app host, e.g. ticketing.beyondcompany.sa)
+    const host = (req.get('host') || '').toLowerCase().split(':')[0];
+    const mainAppHost = (process.env.MAIN_APP_HOST || '').toLowerCase().split(':')[0];
+    const isMainAppHost = mainAppHost && host === mainAppHost;
     const subdomain = host.split('.')[0];
-    if (subdomain && subdomain !== 'www' && subdomain !== 'localhost' && !subdomain.includes(':')) {
+    if (
+      !isMainAppHost &&
+      subdomain &&
+      subdomain !== 'www' &&
+      subdomain !== 'localhost' &&
+      !subdomain.includes(':')
+    ) {
       organizationSlug = subdomain;
     }
 
