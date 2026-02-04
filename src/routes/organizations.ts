@@ -127,6 +127,17 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
     const { name, slug, subdomain } = createOrganizationSchema.parse(req.body);
 
+    // Normalize slug: trim, lowercase, only [a-z0-9-], strip leading/trailing hyphens (same as lookup)
+    const normalizedSlug = String(slug)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+|-+$/g, '') || 'org';
+
+    const normalizedSubdomain = subdomain
+      ? String(subdomain).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '') || null
+      : null;
+
     // Check if user already has an organization as admin (one org per admin)
     const existingUserOrg = await prisma.userOrganization.findFirst({
       where: {
@@ -148,8 +159,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const existingOrg = await prisma.organization.findFirst({
       where: {
         OR: [
-          { slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') },
-          ...(subdomain ? [{ subdomain: subdomain.toLowerCase() }] : []),
+          { slug: normalizedSlug },
+          ...(normalizedSubdomain ? [{ subdomain: normalizedSubdomain }] : []),
         ],
       },
     });
@@ -165,8 +176,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const organization = await prisma.organization.create({
       data: {
         name,
-        slug: slug.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        subdomain: subdomain?.toLowerCase() || null,
+        slug: normalizedSlug,
+        subdomain: normalizedSubdomain,
         joinDate: new Date(),
         expiryDate,
         status: 'ACTIVE',

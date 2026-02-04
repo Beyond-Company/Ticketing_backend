@@ -53,12 +53,23 @@ export const identifyOrganization = async (
       return next();
     }
 
-    // Find organization by slug or subdomain
+    // Normalize slug: trim, lowercase, collapse/s strip leading-trailing hyphens (same as create)
+    const normalizedSlug = String(organizationSlug)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!normalizedSlug) {
+      return next();
+    }
+
+    // Find organization by slug or subdomain (both normalized)
     const organization = await prisma.organization.findFirst({
       where: {
         OR: [
-          { slug: organizationSlug },
-          { subdomain: organizationSlug },
+          { slug: normalizedSlug },
+          { subdomain: normalizedSlug },
         ],
       },
     });
