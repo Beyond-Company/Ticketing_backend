@@ -64,14 +64,18 @@ export const identifyOrganization = async (
       return next();
     }
 
+    // Shape we need for req.organization (Prisma returns subdomain as string | null)
+    type OrgLookup = { id: string; name: string; slug: string; subdomain: string | null };
+
     // Find organization by slug or subdomain (exact normalized match)
-    let organization = await prisma.organization.findFirst({
+    let organization: OrgLookup | null = await prisma.organization.findFirst({
       where: {
         OR: [
           { slug: normalizedSlug },
           { subdomain: normalizedSlug },
         ],
       },
+      select: { id: true, name: true, slug: true, subdomain: true },
     });
 
     // Fallback: find by normalizing stored slug (handles DB slugs stored before create normalization, e.g. "-elorbany-")
@@ -95,7 +99,7 @@ export const identifyOrganization = async (
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
-      subdomain: organization.subdomain || undefined,
+      subdomain: organization.subdomain ?? undefined,
     };
 
     next();
