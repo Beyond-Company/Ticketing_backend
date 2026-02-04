@@ -64,8 +64,8 @@ export const identifyOrganization = async (
       return next();
     }
 
-    // Find organization by slug or subdomain (both normalized)
-    const organization = await prisma.organization.findFirst({
+    // Find organization by slug or subdomain (exact normalized match)
+    let organization = await prisma.organization.findFirst({
       where: {
         OR: [
           { slug: normalizedSlug },
@@ -73,6 +73,18 @@ export const identifyOrganization = async (
         ],
       },
     });
+
+    // Fallback: find by normalizing stored slug (handles DB slugs stored before create normalization, e.g. "-elorbany-")
+    if (!organization) {
+      const allOrgs = await prisma.organization.findMany({
+        select: { id: true, name: true, slug: true, subdomain: true },
+      });
+      organization = allOrgs.find((org) => {
+        const norm = (s: string) =>
+          String(s).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '');
+        return norm(org.slug) === normalizedSlug || (org.subdomain && norm(org.subdomain) === normalizedSlug);
+      }) ?? null;
+    }
 
     if (!organization) {
       return res.status(404).json({ message: 'Organization not found' });
