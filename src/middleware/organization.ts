@@ -173,6 +173,40 @@ export const requireOrgAdmin = async (
 };
 
 /**
+ * Middleware to get organization from authenticated user's first organization (optional auth).
+ * Use with optionalAuthenticate: when no org in request but user is logged in, sets org from user's first org.
+ */
+export const getOrganizationFromUserOptionalAuth = async (
+  req: OrgRequest & { userId?: string },
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (req.organizationId) return next();
+    if (!req.userId) return next();
+
+    const userOrg = await prisma.userOrganization.findFirst({
+      where: { userId: req.userId },
+      include: { organization: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!userOrg) return next();
+
+    req.organizationId = userOrg.organization.id;
+    req.organization = {
+      id: userOrg.organization.id,
+      name: userOrg.organization.name,
+      slug: userOrg.organization.slug,
+      subdomain: userOrg.organization.subdomain ?? undefined,
+    };
+    next();
+  } catch (error) {
+    return res.status(500).json({ message: 'Error getting user organization', error });
+  }
+};
+
+/**
  * Middleware to get organization from authenticated user's first organization
  * Used as fallback when organization is not specified in request
  */

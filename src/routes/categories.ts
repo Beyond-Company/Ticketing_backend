@@ -1,8 +1,8 @@
 import express, { Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/database';
-import { authenticate, AuthRequest } from '../middleware/auth';
-import { identifyOrganization, OrgRequest, verifyOrganizationAccess, requireOrgAdmin, getOrganizationFromUser } from '../middleware/organization';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { identifyOrganization, OrgRequest, verifyOrganizationAccess, requireOrgAdmin, getOrganizationFromUser, getOrganizationFromUserOptionalAuth } from '../middleware/organization';
 
 const router = express.Router();
 
@@ -16,16 +16,15 @@ const updateCategorySchema = z.object({
   nameAr: z.string().optional(),
 });
 
-// Get all categories (organization-scoped, public endpoint)
-// For public endpoints, organization must be specified
-router.get('/', identifyOrganization, async (req: OrgRequest, res: Response) => {
+// Get all categories (organization-scoped; org from ?org=slug or user's first org when authenticated)
+router.get('/', identifyOrganization, optionalAuthenticate, getOrganizationFromUserOptionalAuth, async (req: OrgRequest, res: Response) => {
   try {
-    const organizationId = req.organizationId!;
+    if (!req.organizationId) {
+      return res.status(400).json({ message: 'Organization required. Add ?org=slug or open an organization first.' });
+    }
     const categories = await prisma.category.findMany({
-      where: { organizationId },
-      orderBy: {
-        name: 'asc',
-      },
+      where: { organizationId: req.organizationId },
+      orderBy: { name: 'asc' },
     });
     res.json(categories);
   } catch (error) {
@@ -34,10 +33,13 @@ router.get('/', identifyOrganization, async (req: OrgRequest, res: Response) => 
 });
 
 // Get single category (organization-scoped)
-router.get('/:id', identifyOrganization, async (req: OrgRequest, res: Response) => {
+router.get('/:id', identifyOrganization, optionalAuthenticate, getOrganizationFromUserOptionalAuth, async (req: OrgRequest, res: Response) => {
   try {
+    if (!req.organizationId) {
+      return res.status(400).json({ message: 'Organization required. Add ?org=slug or open an organization first.' });
+    }
     const { id } = req.params;
-    const organizationId = req.organizationId!;
+    const organizationId = req.organizationId;
     const category = await prisma.category.findFirst({
       where: { 
         id,

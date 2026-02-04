@@ -1,8 +1,8 @@
 import express, { Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/database';
-import { authenticate, AuthRequest } from '../middleware/auth';
-import { identifyOrganization, OrgRequest, verifyOrganizationAccess, requireOrgAdmin, getOrganizationFromUser } from '../middleware/organization';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { identifyOrganization, OrgRequest, verifyOrganizationAccess, requireOrgAdmin, getOrganizationFromUser, getOrganizationFromUserOptionalAuth } from '../middleware/organization';
 
 const router = express.Router();
 
@@ -20,15 +20,15 @@ const updateStatusSchema = z.object({
   order: z.number().int().optional(),
 });
 
-// Get all ticket statuses (organization-scoped, public for listing)
-router.get('/', identifyOrganization, async (req: OrgRequest, res: Response) => {
+// Get all ticket statuses (organization-scoped; org from ?org=slug or user's first org when authenticated)
+router.get('/', identifyOrganization, optionalAuthenticate, getOrganizationFromUserOptionalAuth, async (req: OrgRequest, res: Response) => {
   try {
-    const organizationId = req.organizationId!;
+    if (!req.organizationId) {
+      return res.status(400).json({ message: 'Organization required. Add ?org=slug or open an organization first.' });
+    }
     const statuses = await prisma.ticketStatus.findMany({
-      where: { organizationId },
-      orderBy: {
-        order: 'asc',
-      },
+      where: { organizationId: req.organizationId },
+      orderBy: { order: 'asc' },
     });
     res.json(statuses);
   } catch (error) {
@@ -37,10 +37,13 @@ router.get('/', identifyOrganization, async (req: OrgRequest, res: Response) => 
 });
 
 // Get single status (organization-scoped)
-router.get('/:id', identifyOrganization, async (req: OrgRequest, res: Response) => {
+router.get('/:id', identifyOrganization, optionalAuthenticate, getOrganizationFromUserOptionalAuth, async (req: OrgRequest, res: Response) => {
   try {
+    if (!req.organizationId) {
+      return res.status(400).json({ message: 'Organization required. Add ?org=slug or open an organization first.' });
+    }
     const { id } = req.params;
-    const organizationId = req.organizationId!;
+    const organizationId = req.organizationId;
     const status = await prisma.ticketStatus.findFirst({
       where: {
         id,
