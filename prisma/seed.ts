@@ -160,6 +160,20 @@ async function main() {
     },
   });
 
+  // Production/default org (used when frontend has org=elorbany from main app)
+  const orgElorbanyExpiry = new Date();
+  orgElorbanyExpiry.setFullYear(orgElorbanyExpiry.getFullYear() + 1);
+  const orgElorbany = await prisma.organization.create({
+    data: {
+      name: 'El Orbany',
+      slug: 'elorbany',
+      subdomain: 'elorbany',
+      joinDate: new Date(),
+      expiryDate: orgElorbanyExpiry,
+      status: 'ACTIVE',
+    },
+  });
+
   // Link users to organizations (each admin has only ONE organization)
   console.log('🔗 Linking users to organizations...');
   
@@ -186,6 +200,15 @@ async function main() {
     data: {
       userId: admin3.id,
       organizationId: org3.id,
+      role: 'ADMIN',
+    },
+  });
+
+  // Superadmin -> El Orbany (ADMIN) for production/main app
+  await prisma.userOrganization.create({
+    data: {
+      userId: superadmin.id,
+      organizationId: orgElorbany.id,
       role: 'ADMIN',
     },
   });
@@ -265,6 +288,21 @@ async function main() {
     },
   });
 
+  await prisma.category.create({
+    data: {
+      name: 'General',
+      nameAr: 'عام',
+      organizationId: orgElorbany.id,
+    },
+  });
+  await prisma.category.create({
+    data: {
+      name: 'Support',
+      nameAr: 'الدعم',
+      organizationId: orgElorbany.id,
+    },
+  });
+
   // Create ticket statuses per organization
   console.log('📋 Creating ticket statuses...');
   const defaultStatuses = [
@@ -284,6 +322,13 @@ async function main() {
     defaultStatuses.map((s) =>
       prisma.ticketStatus.create({
         data: { ...s, organizationId: org2.id },
+      })
+    )
+  );
+  await Promise.all(
+    defaultStatuses.map((s) =>
+      prisma.ticketStatus.create({
+        data: { ...s, organizationId: orgElorbany.id },
       })
     )
   );
@@ -395,9 +440,9 @@ async function main() {
   console.log('✅ Database seed completed successfully!');
   console.log('\n📋 Seed Summary:');
   console.log(`   - Users: 6 (1 superadmin, 3 admins, 2 regular)`);
-  console.log(`   - Organizations: 3 (each with one admin)`);
-  console.log(`   - Ticket statuses: 12 (4 per org × 3 orgs)`);
-  console.log(`   - Categories: 6`);
+  console.log(`   - Organizations: 4 (3 with admins + El Orbany for superadmin)`);
+  console.log(`   - Ticket statuses: 16 (4 per org × 4 orgs)`);
+  console.log(`   - Categories: 8`);
   console.log(`   - Tickets: 5`);
   console.log(`   - Comments: 4`);
   console.log('\n🔑 Login Credentials:');

@@ -26,12 +26,16 @@ export const identifyOrganization = async (
   try {
     let organizationSlug: string | undefined;
 
-    // Method 1: Check subdomain (skip when this is the main app host, e.g. ticketing.beyondcompany.sa)
+    // Method 1: Check subdomain only when request is from our app domain (e.g. beyondcompany.sa).
+    // When the API is on a different host (e.g. Railway), skip subdomain so header/query are used.
     const host = (req.get('host') || '').toLowerCase().split(':')[0];
     const mainAppHost = (process.env.MAIN_APP_HOST || '').toLowerCase().split(':')[0];
+    const mainAppDomain = (process.env.MAIN_APP_DOMAIN || (mainAppHost ? mainAppHost.split('.').slice(-2).join('.') : '')).toLowerCase();
     const isMainAppHost = mainAppHost && host === mainAppHost;
+    const isOnAppDomain = mainAppHost && (host === mainAppHost || (mainAppDomain && (host === mainAppDomain || host.endsWith('.' + mainAppDomain))));
     const subdomain = host.split('.')[0];
     if (
+      isOnAppDomain &&
       !isMainAppHost &&
       subdomain &&
       subdomain !== 'www' &&
