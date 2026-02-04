@@ -182,6 +182,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Create default ticket statuses for the new organization
+    const defaultStatuses = [
+      { name: 'Open', nameAr: 'مفتوحة', color: '#3b82f6', order: 0 },
+      { name: 'In Progress', nameAr: 'قيد التنفيذ', color: '#f59e0b', order: 1 },
+      { name: 'Resolved', nameAr: 'تم الحل', color: '#10b981', order: 2 },
+      { name: 'Closed', nameAr: 'مغلقة', color: '#6b7280', order: 3 },
+    ];
+    await prisma.ticketStatus.createMany({
+      data: defaultStatuses.map((s) => ({
+        ...s,
+        organizationId: organization.id,
+      })),
+    });
+
     res.status(201).json(organization);
   } catch (error) {
     if (error instanceof z.ZodError) {

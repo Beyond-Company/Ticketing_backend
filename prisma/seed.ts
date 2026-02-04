@@ -11,6 +11,7 @@ async function main() {
   try {
     await prisma.comment.deleteMany();
     await prisma.ticket.deleteMany();
+    await prisma.ticketStatus.deleteMany();
     await prisma.category.deleteMany();
     await prisma.userOrganization.deleteMany();
     await prisma.organization.deleteMany();
@@ -264,13 +265,41 @@ async function main() {
     },
   });
 
+  // Create ticket statuses per organization
+  console.log('📋 Creating ticket statuses...');
+  const defaultStatuses = [
+    { name: 'Open', nameAr: 'مفتوحة', color: '#3b82f6', order: 0 },
+    { name: 'In Progress', nameAr: 'قيد التنفيذ', color: '#f59e0b', order: 1 },
+    { name: 'Resolved', nameAr: 'تم الحل', color: '#10b981', order: 2 },
+    { name: 'Closed', nameAr: 'مغلقة', color: '#6b7280', order: 3 },
+  ];
+  const org1Statuses = await Promise.all(
+    defaultStatuses.map((s, i) =>
+      prisma.ticketStatus.create({
+        data: { ...s, organizationId: org1.id },
+      })
+    )
+  );
+  const org2Statuses = await Promise.all(
+    defaultStatuses.map((s) =>
+      prisma.ticketStatus.create({
+        data: { ...s, organizationId: org2.id },
+      })
+    )
+  );
+  const open1 = org1Statuses.find((s) => s.name === 'Open')!;
+  const inProgress1 = org1Statuses.find((s) => s.name === 'In Progress')!;
+  const resolved1 = org1Statuses.find((s) => s.name === 'Resolved')!;
+  const open2 = org2Statuses.find((s) => s.name === 'Open')!;
+  const resolved2 = org2Statuses.find((s) => s.name === 'Resolved')!;
+
   // Create tickets
   console.log('🎫 Creating tickets...');
   const ticket1 = await prisma.ticket.create({
     data: {
       title: 'Unable to login to dashboard',
       description: 'I am unable to login to the dashboard. Getting an error message.',
-      status: 'OPEN',
+      statusId: open1.id,
       priority: 'HIGH',
       categoryId: category1.id,
       userId: user1.id,
@@ -283,7 +312,7 @@ async function main() {
     data: {
       title: 'Payment processing issue',
       description: 'The payment is not being processed correctly for subscription renewals.',
-      status: 'IN_PROGRESS',
+      statusId: inProgress1.id,
       priority: 'URGENT',
       categoryId: category2.id,
       userId: user2.id,
@@ -296,7 +325,7 @@ async function main() {
     data: {
       title: 'Add dark mode feature',
       description: 'It would be great to have a dark mode option for the application.',
-      status: 'OPEN',
+      statusId: open1.id,
       priority: 'LOW',
       categoryId: category3.id,
       userId: user1.id,
@@ -308,7 +337,7 @@ async function main() {
     data: {
       title: 'Application crashes on mobile',
       description: 'The application crashes when opening on mobile devices.',
-      status: 'RESOLVED',
+      statusId: resolved2.id,
       priority: 'HIGH',
       categoryId: category4.id,
       userId: user2.id,
@@ -321,7 +350,7 @@ async function main() {
     data: {
       title: 'Email notifications not working',
       description: 'I am not receiving email notifications for ticket updates.',
-      status: 'OPEN',
+      statusId: open1.id,
       priority: 'MEDIUM',
       categoryId: category1.id,
       userId: user1.id,
@@ -367,6 +396,7 @@ async function main() {
   console.log('\n📋 Seed Summary:');
   console.log(`   - Users: 6 (1 superadmin, 3 admins, 2 regular)`);
   console.log(`   - Organizations: 3 (each with one admin)`);
+  console.log(`   - Ticket statuses: 12 (4 per org × 3 orgs)`);
   console.log(`   - Categories: 6`);
   console.log(`   - Tickets: 5`);
   console.log(`   - Comments: 4`);
