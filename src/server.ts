@@ -53,6 +53,10 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// API Documentation (Swagger UI) - must be before other routes
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', swaggerUi.setup(openApiSpec));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/organizations', organizationRoutes);
@@ -62,9 +66,6 @@ app.use('/api/statuses', statusRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
-
-// API Documentation (Swagger UI)
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 // Health check
 app.get('/api/health', (req, res) => {
