@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import swaggerUi from 'swagger-ui-express';
+import { openApiSpec } from './openapi';
 import authRoutes from './routes/auth';
 import ticketRoutes from './routes/tickets';
 import categoryRoutes from './routes/categories';
@@ -60,6 +62,9 @@ app.use('/api/statuses', statusRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
+
+// API Documentation (Swagger UI)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 // Health check
 app.get('/api/health', (req, res) => {
